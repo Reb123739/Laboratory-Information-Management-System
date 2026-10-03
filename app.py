@@ -9,7 +9,11 @@ import hashlib
 
 DB_NAME = "lims.db"
 
-st.set_page_config(page_title="LIMS", page_icon="🧪", layout="wide")
+st.set_page_config(
+    page_title="LIMS",
+    page_icon="🧪",
+    layout="wide"
+)
 
 
 # =========================================================
@@ -20,7 +24,6 @@ def setup_database():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    # Create user table if it does not already exist
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,11 +33,9 @@ def setup_database():
         )
     """)
 
-    # Check existing columns in user table
     cursor.execute("PRAGMA table_info(user)")
     columns = [column[1] for column in cursor.fetchall()]
 
-    # Add full_name to an existing user table if necessary
     if "full_name" not in columns:
         cursor.execute(
             "ALTER TABLE user ADD COLUMN full_name TEXT"
@@ -62,10 +63,13 @@ def hash_password(password):
 # =========================================================
 
 def register_user(full_name, username, password):
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
     try:
+        username = username.strip().lower()
+
         hashed_password = hash_password(password)
 
         cursor.execute(
@@ -75,7 +79,7 @@ def register_user(full_name, username, password):
             VALUES (?, ?, ?)
             """,
             (
-                full_name,
+                full_name.strip(),
                 username,
                 hashed_password
             )
@@ -86,9 +90,11 @@ def register_user(full_name, username, password):
         return True, "Account created successfully."
 
     except sqlite3.IntegrityError:
+
         return False, "Username already exists."
 
     finally:
+
         conn.close()
 
 
@@ -97,11 +103,17 @@ def register_user(full_name, username, password):
 # =========================================================
 
 def check_login(username, password):
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
-    # First try the new hashed password
+    username = username.strip().lower()
+
     hashed_password = hash_password(password)
+
+    # -----------------------------------------------------
+    # Check hashed password
+    # -----------------------------------------------------
 
     cursor.execute(
         """
@@ -118,8 +130,11 @@ def check_login(username, password):
 
     result = cursor.fetchone()
 
-    # If not found, check old plain-text password.
-    # This allows existing accounts to continue working.
+    # -----------------------------------------------------
+    # Check old plain-text password
+    # This keeps existing accounts working.
+    # -----------------------------------------------------
+
     if result is None:
 
         cursor.execute(
@@ -137,8 +152,10 @@ def check_login(username, password):
 
         result = cursor.fetchone()
 
-        # If an old account logged in successfully,
-        # upgrade its password to hashed form.
+        # -------------------------------------------------
+        # Upgrade old password to hashed password
+        # -------------------------------------------------
+
         if result is not None:
 
             cursor.execute(
@@ -165,6 +182,7 @@ def check_login(username, password):
 # =========================================================
 
 def add_patient(name, date_registered):
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -185,6 +203,7 @@ def add_patient(name, date_registered):
 
 
 def get_all_patients():
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -211,6 +230,7 @@ def add_test_request(
     test_type,
     date_requested
 ):
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -232,6 +252,7 @@ def add_test_request(
 
 
 def get_all_test_requests():
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -275,6 +296,7 @@ def add_specimen(
     status,
     last_updated
 ):
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -297,6 +319,7 @@ def add_specimen(
 
 
 def get_all_specimens():
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -326,6 +349,7 @@ def update_specimen_status(
     specimen_id,
     new_status
 ):
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -357,6 +381,7 @@ def add_result(
     validated,
     date_tested
 ):
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -379,6 +404,7 @@ def add_result(
 
 
 def get_all_results():
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -412,6 +438,7 @@ def get_all_results():
 # =========================================================
 
 def get_full_report():
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -455,11 +482,6 @@ def generate_patient_pdf(
     records,
     generated_by
 ):
-    """
-    Generates a one-patient laboratory report.
-    The logged-in user's full name is shown
-    as the person who generated the report.
-    """
 
     pdf = FPDF()
     pdf.add_page()
@@ -584,23 +606,37 @@ def generate_patient_pdf(
 
         result_value = record.get("Result")
 
+        if (
+            result_value is None
+            or str(result_value).strip() == ""
+        ):
+
+            result_text = "Not entered"
+
+        else:
+
+            result_text = str(result_value)
+
         pdf.cell(
             col_widths[3],
             8,
-            str(result_value)
-            if result_value
-            else "Pending",
+            result_text,
             border=1
         )
 
         validated = record.get("Validated")
 
         if validated == 1:
+
             validated_text = "Yes"
+
         elif validated == 0:
+
             validated_text = "No"
+
         else:
-            validated_text = "Pending"
+
+            validated_text = "Not entered"
 
         pdf.cell(
             col_widths[4],
@@ -666,31 +702,15 @@ def login_screen():
 
     with col2:
 
-        st.markdown(
-            """
-            <div style="
-                text-align:center;
-                margin-top:60px;
-                margin-bottom:20px;
-            ">
+        st.markdown("""
+            <h2 style="text-align:center; margin-bottom:5px;">
+                Laboratory Information Management System
+            </h2>
 
-                <div style="font-size:48px;">
-                    🧪
-                </div>
-
-                <h2 style="margin-bottom:0;">
-                    Laboratory Information<br>
-                    Management System
-                </h2>
-
-                <p style="color:gray;">
-                    Please sign in or create an account
-                </p>
-
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+            <p style="text-align:center; color:gray; font-size:15px;">
+                Secure Laboratory Information and Records Management
+            </p>
+        """, unsafe_allow_html=True)
 
         login_tab, signup_tab = st.tabs(
             [
@@ -738,7 +758,7 @@ def login_screen():
                     else:
 
                         user = check_login(
-                            username.strip(),
+                            username,
                             password
                         )
 
@@ -748,8 +768,6 @@ def login_screen():
 
                             st.session_state.user_id = user[0]
 
-                            # If old account has no full name,
-                            # use username temporarily.
                             st.session_state.user_full_name = (
                                 user[1]
                                 if user[1]
@@ -839,8 +857,8 @@ def login_screen():
                     else:
 
                         success, message = register_user(
-                            full_name.strip(),
-                            username.strip(),
+                            full_name,
+                            username,
                             password
                         )
 
@@ -1246,15 +1264,27 @@ def report_screen():
         columns=columns
     )
 
+    # -----------------------------------------------------
+    # Display validation status clearly
+    # -----------------------------------------------------
+
     df["Validated"] = df[
         "Validated"
     ].map(
         {
             1: "Yes",
-            0: "No",
-            None: "Pending"
+            0: "No"
         }
     )
+
+    # Records with no result have no validation status.
+    df["Validated"] = df["Validated"].fillna(
+        "Not entered"
+    )
+
+    # -----------------------------------------------------
+    # Display results
+    # -----------------------------------------------------
 
     st.subheader(
         "All Records"
@@ -1281,6 +1311,10 @@ def report_screen():
         use_container_width=True
     )
 
+    # -----------------------------------------------------
+    # CSV DOWNLOAD
+    # -----------------------------------------------------
+
     csv = filtered_df.to_csv(
         index=False
     ).encode("utf-8")
@@ -1294,13 +1328,25 @@ def report_screen():
 
     st.divider()
 
+    # -----------------------------------------------------
+    # PDF REPORT
+    # -----------------------------------------------------
+
     st.subheader(
         "Generate a Printable PDF Report for One Patient"
     )
 
     unique_patients = sorted(
-        df["Patient"].unique()
+        df["Patient"].dropna().unique()
     )
+
+    if not unique_patients:
+
+        st.write(
+            "No patients available for PDF generation."
+        )
+
+        return
 
     selected_patient = st.selectbox(
         "Select Patient",
@@ -1315,9 +1361,24 @@ def report_screen():
 
         patient_records = df[
             df["Patient"] == selected_patient
-        ].to_dict("records")
+        ].copy()
 
-        # Get the name of the currently logged-in user
+        # Convert display value back for PDF generation.
+        patient_records["Validated"] = (
+            patient_records["Validated"].replace(
+                {
+                    "Yes": 1,
+                    "No": 0,
+                    "Not entered": None
+                }
+            )
+        )
+
+        patient_records = patient_records.to_dict(
+            "records"
+        )
+
+        # Get the name of the currently logged-in user.
         generated_by = st.session_state.get(
             "user_full_name",
             "LIMS User"
@@ -1401,6 +1462,7 @@ else:
         ]:
 
             if key in st.session_state:
+
                 del st.session_state[key]
 
         st.session_state.logged_in = False
